@@ -58,6 +58,9 @@ class Element:
 
     def can_accept(self):
         raise NotImplementedError()
+    
+    def put_in_queue(self, element):
+        raise NotImplementedError()
 
     def get_next_element_with_highest_priority(self):
         max_priority = float(sys.maxsize)
@@ -113,6 +116,8 @@ class Device:
         self.name = name
         self.tnext = float(sys.maxsize)
         self.state = State.FREE
+        
+        self.data = None
 
 
 class Process(Element):

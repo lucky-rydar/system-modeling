@@ -13,3 +13,10 @@ class Rand:
         a = random.normalvariate(mean_time, std_deviation)
         return a
     
+    def uniform(a, b):
+        a = random.uniform(a, b)
+        return a
+
+    def erlang(mean_time, k):
+        return random.gammavariate(k, mean_time / k)
+    
