@@ -43,11 +43,17 @@ class HumanInput(Create):
         self.sick_human_to_send = self._generate_next_sick()
         self.tnext = self.tcurr + self.sick_type_delay[self.sick_human_to_send.sick_type]
 
+        self.mean_delay_sum = self.sick_type_delay[self.sick_human_to_send.sick_type]
+        self.mean_delay_count = 1
+
     def out_act(self):
         self.quantity += 1
 
         sick_human = self._generate_next_sick()
         self.tnext = self.tcurr + self.sick_type_delay[sick_human.sick_type]
+
+        self.mean_delay_sum += self.sick_type_delay[sick_human.sick_type]
+        self.mean_delay_count += 1
 
         if len(self.next_elements) > 1:
             raise Exception('HumanInput has to have exactly 1 next element')
@@ -64,6 +70,12 @@ class HumanInput(Create):
         ])
 
         return SickHuman(SickType(sick_type))
+    
+    def get_mean_delay(self):
+        if self.mean_delay_count != 0:
+            return self.mean_delay_sum / self.mean_delay_count
+        else:
+            return -1
 
 
 class GeneralSickProcessor(Process):
@@ -72,6 +84,14 @@ class GeneralSickProcessor(Process):
         self.sick_human = None
         self.queue = Queue(maxqueue)
         self.delay_func = delay_func
+
+        self.mean_delay_sum = 0
+        self.mean_delay_count = 0
+
+        self.mean_between_in_act_sum = 0
+        self.mean_between_in_act_count = 0
+        
+        self.last_in_act_tcurr = 0
 
     def do_statistics(self, delta):
         self.meanQueue += (self.queue.qsize() * delta)        
@@ -97,13 +117,30 @@ class GeneralSickProcessor(Process):
 
     def get_delay_specific(self, sick_human = None):
         raise Exception('Not implemented')
+    
+    def get_between_in_act(self):
+        if self.mean_between_in_act_count == 0:
+            return -1
+        return self.mean_between_in_act_sum / self.mean_between_in_act_count
 
     def in_act(self, sick_human):
+        if self.tcurr != 0:
+            between_in_act = self.tcurr - self.last_in_act_tcurr
+            self.mean_between_in_act_sum += between_in_act
+            self.mean_between_in_act_count += 1
+            self.last_in_act_tcurr = self.tcurr
+
+
         if self.get_free_device() is not None:
             device = self.get_free_device()
             device.state = State.BUSY
-            device.tnext = self.tcurr + self.get_delay_specific(sick_human)
+
+            tmp_delay = self.get_delay_specific(sick_human)
+            device.tnext = self.tcurr + tmp_delay
             device.data = sick_human
+
+            self.mean_delay_sum += tmp_delay
+            self.mean_delay_count += 1
         else:
             if self.queue.qsize() < self.maxqueue:
                 self.put_in_queue(sick_human)
@@ -125,11 +162,24 @@ class GeneralSickProcessor(Process):
 
             free_device = self.get_free_device()
             free_device.state = State.BUSY
-            free_device.tnext = self.tcurr + self.get_delay_specific(element_to_attach)
+
+            tmp_delay = self.get_delay_specific(element_to_attach)
+            if self.name == 'Room':
+                print(f'Room delay: {tmp_delay}')
+
+            free_device.tnext = self.tcurr + tmp_delay
             free_device.data = element_to_attach
+
+            self.mean_delay_sum += tmp_delay
+            self.mean_delay_count += 1
 
         # after super() call in child use self.data_to_send to send where needed
     
+    def get_mean_delay(self):
+        if self.mean_delay_count != 0:
+            return self.mean_delay_sum / self.mean_delay_count
+        else:
+            return -1
 
 
 class Hospital(GeneralSickProcessor):
@@ -264,3 +314,26 @@ if __name__ == '__main__':
 
     model = Model([human_input, hospital, room, lab_reg, lab, path_to_hospital], debug=False)
     model.simulate(1000)
+
+    print('\n')
+    print(f'Mean delay for:\n\
+        \t{human_input.name}: {human_input.get_mean_delay():.2f},\n\
+        \t{hospital.name}: {hospital.get_mean_delay():.2f},\n\
+        \t{room.name}: {room.get_mean_delay():.2f},\n\
+        \t{lab_reg.name}: {lab_reg.get_mean_delay():.2f},\n\
+        \t{lab.name}: {lab.get_mean_delay():.2f},\n\
+        \t{path_to_hospital.name}: {path_to_hospital.get_mean_delay():.2f}')
+    
+    print('\n')
+    sum_time_first = hospital.get_mean_delay() + room.get_mean_delay()
+    print(f'Time for type FIRST: {sum_time_first}')
+
+    sum_time_second = hospital.get_mean_delay() + lab_reg.get_mean_delay() + lab.get_mean_delay() + path_to_hospital.get_mean_delay()
+    print(f'Time for type SECOND-THIRD cycle: {sum_time_second}')
+
+    sum_time_third = hospital.get_mean_delay() + lab_reg.get_mean_delay() + lab.get_mean_delay()
+    print(f'Time for type SECOND-THIRD end after lab: {sum_time_third}')
+
+    print('\n')
+    print(f'Between in act for lab: {lab.get_between_in_act():.2f}')
+

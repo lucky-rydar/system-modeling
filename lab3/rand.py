@@ -19,4 +19,16 @@ class Rand:
 
     def erlang(mean_time, k):
         return random.gammavariate(k, mean_time / k)
+
+if __name__ == '__main__':
+    # Test exp function
+    print(Rand.exp(5)) # Expected output: a float value
     
+    # Test norm function
+    print(Rand.norm(0, 1)) # Expected output: a float value
+    
+    # Test uniform function
+    print(Rand.uniform(0, 10)) # Expected output: a float value
+    
+    # Test erlang function
+    print(Rand.erlang(5, 3)) # Expected output: a float value

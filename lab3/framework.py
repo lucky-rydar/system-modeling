@@ -62,6 +62,9 @@ class Element:
     def put_in_queue(self, element):
         raise NotImplementedError()
 
+    def get_mean_delay(self):
+        raise NotImplementedError()
+
     def get_next_element_with_highest_priority(self):
         max_priority = float(sys.maxsize)
         ret_element = None
