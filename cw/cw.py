@@ -115,14 +115,10 @@ class MainEOM(Process):
             self.tnext_recovery = self.tcurr + self.recovery_delay
             self.tnext_shutdown = float(sys.maxsize)
             self.tnext_i_am_working = float(sys.maxsize)
-            
-            self.devices[0].tnext = float(sys.maxsize)
 
             # expected to be one device
-            min_dev = self.get_min_device()
-            if min_dev is not None:
-                min_dev.state = State.FREE
-                min_dev.tnext = float(sys.maxsize)
+            self.devices[0].tnext = float(sys.maxsize)
+            self.devices[0].state = State.FREE
 
         elif tmp_tnext == self.tnext_recovery:
             self.is_shutdown = False
@@ -141,6 +137,13 @@ class MainEOM(Process):
             min_dev = self.get_min_device()
             min_dev.state = State.FREE
             min_dev.tnext = float(sys.maxsize)
+
+    def print_info(self):
+        super().print_info()
+        print(f'\tis_shutdown: {self.is_shutdown} \
+                tnext_shutdown: {self.tnext_shutdown} \
+                tnext_recovery: {self.tnext_recovery} \
+                tnext_i_am_working: {self.tnext_i_am_working}')
 
 
 class ReservEOM(Process):
