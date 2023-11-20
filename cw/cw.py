@@ -10,14 +10,14 @@ class TechProcessGenerator(Create):
         NORMAL = 0
         SLOW = 1
 
-    def __init__(self, name):
+    def __init__(self, name, normal_delay=(8, 12), slow_delay=(16, 24)):
         super().__init__(None, name)
         #self.name = name
         self.working_mode = TechProcessGenerator.Mode.NORMAL
 
         self.modes = {
-            TechProcessGenerator.Mode.NORMAL: (8, 12),
-            TechProcessGenerator.Mode.SLOW: (16, 24)
+            TechProcessGenerator.Mode.NORMAL: normal_delay,
+            TechProcessGenerator.Mode.SLOW: slow_delay
         }
 
         self.received_control_signal = False
@@ -57,17 +57,17 @@ class TechProcessGenerator(Create):
 
 
 class MainEOM(Process):
-    def __init__(self, delay, name, reserve_eom, generator):
+    def __init__(self, delay, name, reserve_eom, generator, recovery_delay=100, i_am_working_delay=30):
         super().__init__(delay, name, None, 1, 0)
 
         self.shutdown_delay_f = lambda: Rand.uniform(270, 330)
-        self.recovery_delay = 100
-        self.i_am_working_delay = 30
+        self.recovery_delay = recovery_delay
+        self.i_am_working_delay = i_am_working_delay
         self.is_shutdown = False
 
         self.tnext_shutdown = self.tcurr + self.shutdown_delay_f()
         self.tnext_recovery = float(sys.maxsize)
-        self.tnext_i_am_working = float(sys.maxsize)
+        self.tnext_i_am_working = 0
 
         if not isinstance(reserve_eom, ReservEOM):
             raise TypeError('Reserve EOM must be an instance of ReservEOM class')
@@ -151,19 +151,21 @@ class ReservEOM(Process):
         PASSIVE = 0
         ACTIVE = 1
 
-    def __init__(self, delay, name, generator):
+    def __init__(self, delay, name, generator, main_alive_delay=30, started_up_delay=5):
         super().__init__(delay, name, None, 1, 1)
 
         if not isinstance(generator, TechProcessGenerator):
             raise TypeError('Generator must be an instance of TechProcessGenerator class')
         self.generator = generator
 
+        self.main_eom = None
+
         self.is_main_alive = True
-        self.tnext_main_alive = 1
+        self.tnext_main_alive = main_alive_delay
         self.tnext_started_up = float(sys.maxsize)
 
-        self.main_alive_delay = 30
-        self.started_up_delay = 5
+        self.main_alive_delay = main_alive_delay
+        self.started_up_delay = started_up_delay
 
         self.working_state = ReservEOM.WorkingState.PASSIVE
 
@@ -180,7 +182,7 @@ class ReservEOM(Process):
         return min(tmp_tnext, self.tnext_main_alive, self.tnext_started_up)
 
     def in_act(self):
-        if self.get_free_device() is not None:
+        if self.get_free_device() is not None and self.working_state == ReservEOM.WorkingState.ACTIVE:
             device = self.get_free_device()
             device.state = State.BUSY
             device.tnext = self.tcurr + self.delayMean
@@ -192,10 +194,14 @@ class ReservEOM(Process):
 
     def out_act(self):
         tmp_tnext = self.get_tnext()
+
         if tmp_tnext == self.tnext_main_alive:
-            self.is_main_alive = False
-            self.tnext_main_alive = float(sys.maxsize)
-            self.tnext_started_up = self.tcurr + self.started_up_delay
+            if self.main_eom.is_shutdown:
+                self.is_main_alive = False
+                self.tnext_main_alive = float(sys.maxsize)
+                self.tnext_started_up = self.tcurr + self.started_up_delay
+            else:
+                self.tnext_main_alive = self.tcurr + self.main_alive_delay
 
         elif tmp_tnext == self.tnext_started_up:
             self.working_state = ReservEOM.WorkingState.ACTIVE
@@ -205,9 +211,8 @@ class ReservEOM(Process):
             self.quantity += 1
             self.inform_generator_element_proceeded()
 
-            min_dev = self.get_min_device()
-            min_dev.state = State.FREE
-            min_dev.tnext = float(sys.maxsize)
+            self.devices[0].state = State.FREE
+            self.devices[0].tnext = float(sys.maxsize)
     
     def out_act_all(self, tcurr_next=None):
         super().out_act_all(tcurr_next)
@@ -228,11 +233,14 @@ class ReservEOM(Process):
 if __name__ == '__main__':
     generator = TechProcessGenerator('Generator')
 
-    reserve_eom = ReservEOM(3, 'Reserve EOM', generator)
+    reserve_eom = ReservEOM(3, 'Reserve EOM', generator, started_up_delay=5)
     main_eom = MainEOM(3, 'Main EOM', reserve_eom, generator)
+
+    reserve_eom.main_eom = main_eom
+
 
     generator.main_eom = main_eom
     generator.reserve_eom = reserve_eom
 
     model = Model([generator, reserve_eom, main_eom], debug=True)
-    model.simulate(1000)
+    model.simulate(400)

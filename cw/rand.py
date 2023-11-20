@@ -20,6 +20,11 @@ class Rand:
     def erlang(mean_time, k):
         return random.gammavariate(k, mean_time / k)
 
+    class Integer:
+        def uniform(a, b):
+            a = random.randint(a, b)
+            return a
+
 if __name__ == '__main__':
     # Test exp function
     print(Rand.exp(5)) # Expected output: a float value
