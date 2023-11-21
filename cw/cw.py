@@ -24,6 +24,11 @@ class TechProcessGenerator(Create):
 
         self.main_eom = None
         self.reserve_eom = None
+
+        self.slowed_mean_time_sum = 0
+        self.slowed_mean_time_quantity = 0
+        self.slowed_time_start = 0
+        self.slowed_time_end = 0
     
     def set_working_mode(self, mode):
         self.working_mode = mode
@@ -31,14 +36,19 @@ class TechProcessGenerator(Create):
     def out_act(self):
         self.quantity += 1
 
+        distribution = self.modes[self.working_mode]
+        delay = Rand.uniform(distribution[0], distribution[1])
+        self.tnext = self.tcurr + delay
+
         if not self.received_control_signal:
             self.working_mode = TechProcessGenerator.Mode.SLOW
+            self.slowed_time_start = self.tcurr
         else:
             self.working_mode = TechProcessGenerator.Mode.NORMAL
             self.received_control_signal = False
-
-        distribution = self.modes[self.working_mode]
-        self.tnext = self.tcurr + Rand.uniform(distribution[0], distribution[1])
+            self.slowed_time_end = self.tcurr
+            self.slowed_mean_time_sum += self.slowed_time_end - self.slowed_time_start
+            self.slowed_mean_time_quantity += 1
 
         if self.main_eom.is_shutdown:
             self.reserve_eom.in_act()
@@ -202,6 +212,7 @@ class ReservEOM(Process):
                 self.tnext_started_up = self.tcurr + self.started_up_delay
             else:
                 self.tnext_main_alive = self.tcurr + self.main_alive_delay
+                self.working_state = ReservEOM.WorkingState.PASSIVE
 
         elif tmp_tnext == self.tnext_started_up:
             self.working_state = ReservEOM.WorkingState.ACTIVE
@@ -240,5 +251,13 @@ if __name__ == '__main__':
     generator.main_eom = main_eom
     generator.reserve_eom = reserve_eom
 
-    model = Model([generator, reserve_eom, main_eom], debug=True)
-    model.simulate(400)
+    model = Model([generator, reserve_eom, main_eom], debug=True, debug_delay=0)
+    model.simulate(10000)
+
+    print('\n')
+    print(f'Stats:\n\
+          \tmain failures: {main_eom.failure}\n\
+          \treserve failures: {reserve_eom.failure}\n\
+          \ttotal failures: {main_eom.failure + reserve_eom.failure}\n\
+          \n\
+          \taverage generator slowed time: {generator.slowed_mean_time_sum / generator.slowed_mean_time_quantity}')

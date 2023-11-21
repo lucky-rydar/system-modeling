@@ -215,13 +215,14 @@ class Process(Element):
 
 
 class Model:
-    def __init__(self, elements, debug = False):
+    def __init__(self, elements, debug = False, debug_delay = 0.1):
         self.elements = elements
         self.delta = 0.0
         self.tnext = 0.0
         self.tcurr = 0.0
         self.curr_element = None
         self.debug = debug
+        self.debug_delay = debug_delay
     
     def simulate(self, time_modeling):
         i = 0
@@ -246,7 +247,8 @@ class Model:
 
             if self.debug:
                 self.print_result(i)
-                time.sleep(0.1)
+                if self.debug_delay > 0:
+                    time.sleep(self.debug_delay)
             i += 1
 
         print('\n\nModeling finished!\n')
