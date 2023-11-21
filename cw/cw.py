@@ -237,8 +237,6 @@ if __name__ == '__main__':
     main_eom = MainEOM(3, 'Main EOM', reserve_eom, generator)
 
     reserve_eom.main_eom = main_eom
-
-
     generator.main_eom = main_eom
     generator.reserve_eom = reserve_eom
 
