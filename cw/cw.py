@@ -29,9 +29,6 @@ class TechProcessGenerator(Create):
         self.slowed_mean_time_quantity = 0
         self.slowed_time_start = 0
         self.slowed_time_end = 0
-    
-    def set_working_mode(self, mode):
-        self.working_mode = mode
 
     def out_act(self):
         self.quantity += 1
@@ -41,14 +38,18 @@ class TechProcessGenerator(Create):
         self.tnext = self.tcurr + delay
 
         if not self.received_control_signal:
+            if self.working_mode == TechProcessGenerator.Mode.NORMAL:
+                self.slowed_time_start = self.tcurr
+
             self.working_mode = TechProcessGenerator.Mode.SLOW
-            self.slowed_time_start = self.tcurr
         else:
+            if self.working_mode == TechProcessGenerator.Mode.SLOW:
+                self.slowed_time_end = self.tcurr
+                self.slowed_mean_time_sum += self.slowed_time_end - self.slowed_time_start
+                self.slowed_mean_time_quantity += 1
+
             self.working_mode = TechProcessGenerator.Mode.NORMAL
             self.received_control_signal = False
-            self.slowed_time_end = self.tcurr
-            self.slowed_mean_time_sum += self.slowed_time_end - self.slowed_time_start
-            self.slowed_mean_time_quantity += 1
 
         if self.main_eom.is_shutdown:
             self.reserve_eom.in_act()
@@ -252,7 +253,7 @@ if __name__ == '__main__':
     generator.reserve_eom = reserve_eom
 
     model = Model([generator, reserve_eom, main_eom], debug=True, debug_delay=0)
-    model.simulate(10000)
+    model.simulate(50000)
 
     print('\n')
     print(f'Stats:\n\
