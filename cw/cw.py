@@ -253,7 +253,7 @@ if __name__ == '__main__':
     generator.reserve_eom = reserve_eom
 
     model = Model([generator, reserve_eom, main_eom], debug=True, debug_delay=0)
-    model.simulate(50000)
+    model.simulate(10000)
 
     print('\n')
     print(f'Stats:\n\
